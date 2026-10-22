@@ -1,0 +1,981 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bauzonen Legostadt</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: ein Zonenplan wie vom Bauamt – Plankopf oben, Karte als Hauptfläche, Werkzeugleiste rechts (auf dem Handy darunter). */
+:root {
+  --paper: #eef1ee;
+  --surface: #ffffff;
+  --ink: #1b2830;
+  --muted: #56646c;
+  --line: #d3d9d5;
+  --accent: #1d5c88;
+  --accent-ink: #ffffff;
+  --floor: #e2ded3;
+  --good: #2f7d3b;
+  --good-bg: #e2f1e3;
+  --warn: #8a5a00;
+  --warn-bg: #fbefd0;
+  --info-bg: #e6edf2;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #13181b; --surface: #1c2327; --ink: #e5ebee; --muted: #9eabb2; --line: #323d43;
+    --accent: #6fb2e2; --accent-ink: #0d1a22; --floor: #2a3034;
+    --good: #8fd39a; --good-bg: #1f3424; --warn: #f2c56b; --warn-bg: #3a2f17; --info-bg: #222d34;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #13181b; --surface: #1c2327; --ink: #e5ebee; --muted: #9eabb2; --line: #323d43;
+  --accent: #6fb2e2; --accent-ink: #0d1a22; --floor: #2a3034;
+  --good: #8fd39a; --good-bg: #1f3424; --warn: #f2c56b; --warn-bg: #3a2f17; --info-bg: #222d34;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px 32px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+/* Plankopf */
+.plankopf {
+  display: flex; flex-wrap: wrap; align-items: stretch;
+  border: 2px solid var(--ink); background: var(--surface);
+}
+.plankopf > div { padding: 10px 16px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
+.plankopf .pk-title { flex: 1 1 320px; border-right: 2px solid var(--ink); }
+.plankopf .pk-meta { flex: 0 1 auto; border-right: 2px solid var(--ink); }
+.plankopf .pk-meta:last-child { border-right: 0; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.1; text-wrap: balance; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .35em; }
+#cityName {
+  font: inherit; color: var(--accent); background: transparent; border: 0; border-bottom: 2px dashed var(--line);
+  padding: 0; width: 9ch; min-width: 4ch; max-width: 100%;
+}
+#cityName:focus { outline: none; border-bottom-color: var(--accent); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.pk-meta .mono { font-size: 14px; }
+
+/* Hauptbereich */
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 920px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+.mapcard { background: var(--surface); border: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mapbox { width: 100%; display: flex; justify-content: center; }
+canvas#map { display: block; touch-action: none; cursor: crosshair; max-width: 100%; }
+canvas#map.editing { cursor: pointer; }
+.statusbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; font-size: 14px; color: var(--muted); }
+.statusbar strong { color: var(--ink); }
+.editbanner {
+  background: var(--warn-bg); color: var(--warn); padding: 8px 12px; font-size: 14px; font-weight: 700;
+  border-left: 4px solid var(--warn);
+}
+
+.panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.box { background: var(--surface); border: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.box h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 19px; }
+
+.zones { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.zbtn {
+  display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px;
+  width: 100%; text-align: left; font: inherit; color: var(--ink); background: transparent;
+  border: 2px solid transparent; padding: 6px 8px; cursor: pointer;
+}
+.zbtn:hover { background: var(--paper); }
+.zbtn[aria-pressed="true"] { border-color: var(--ink); background: var(--paper); }
+.zbtn:focus-visible, button:focus-visible, .tool:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.chip { width: 30px; height: 30px; border: 1.5px solid rgba(0,0,0,.35); display: grid; place-items: center; font-size: 16px; }
+.zbtn .zname { font-weight: 700; line-height: 1.2; }
+.zbtn .zcount { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tool {
+  font: inherit; font-weight: 700; font-size: 14px; padding: 9px 6px; cursor: pointer;
+  background: var(--paper); color: var(--ink); border: 2px solid var(--line);
+}
+.tool[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn {
+  font: inherit; font-size: 14px; font-weight: 700; padding: 8px 12px; cursor: pointer;
+  background: var(--surface); color: var(--ink); border: 2px solid var(--ink);
+}
+.btn:hover { background: var(--paper); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { border-color: var(--warn); color: var(--warn); }
+.btn:disabled { opacity: .45; cursor: default; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.zinfo { border-left: 8px solid var(--zc, var(--line)); padding: 4px 0 4px 12px; display: flex; flex-direction: column; gap: 6px; }
+.zinfo h3 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 800; }
+.zinfo p { margin: 0; max-width: 60ch; }
+.zinfo .ex { font-size: 14px; color: var(--muted); }
+
+.stats { display: flex; flex-direction: column; gap: 8px; }
+.stackbar { display: flex; height: 18px; border: 1px solid var(--line); background: var(--floor); overflow: hidden; }
+.stackbar span { display: block; height: 100%; }
+.statlist { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 4px 10px; font-size: 14px; align-items: center; }
+.statlist .sw { width: 14px; height: 14px; border: 1px solid rgba(0,0,0,.3); }
+.statlist .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--muted); }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+
+details.box > summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 19px; list-style-position: outside; }
+.hints { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hints li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; font-size: 14px; }
+.tag { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px; }
+.tag.tipp { background: var(--warn-bg); color: var(--warn); }
+.tag.gut { background: var(--good-bg); color: var(--good); }
+.tag.info { background: var(--info-bg); color: var(--muted); }
+.teacher p { margin: 0; font-size: 14px; }
+.teacher ul { margin: 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.toast { font-size: 13px; color: var(--good); min-height: 1.2em; margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="plankopf">
+    <div class="pk-title">
+      <span class="eyebrow">Zonenplan</span>
+      <h1><span>Bauzonen</span> <input id="cityName" type="text" value="Legostadt" aria-label="Name der Stadt" maxlength="30" spellcheck="false"></h1>
+    </div>
+    <div class="pk-meta">
+      <span class="eyebrow">Raster</span>
+      <span class="mono">1 Feld = ¼ Strassenplatte</span>
+      <span class="mono">= 16 × 16 Noppen</span>
+    </div>
+    <div class="pk-meta">
+      <span class="eyebrow">Plan</span>
+      <span class="mono" id="pkSize">16 × 18 Felder</span>
+      <span class="mono" id="pkFree">0 von 0 eingeteilt</span>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="mapcard" aria-label="Karte">
+      <div class="editbanner" id="editBanner" hidden>Bearbeitungsmodus Strassennetz: Klicke in die Mitte einer Platte, um ihre Art zu wechseln. Klicke an einen Plattenrand, um dort eine Strasse an- oder auszuschalten.</div>
+      <div class="mapbox" id="mapbox"><canvas id="map" aria-label="Stadtplan mit Strassen und Bauzonen"></canvas></div>
+      <div class="statusbar">
+        <span id="hoverInfo">Fahre mit der Maus über die Karte.</span>
+        <span id="toolHint">Malen: Klicken und ziehen</span>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="box">
+        <h2>Zone wählen</h2>
+        <div class="zones" id="zoneList"></div>
+      </div>
+
+      <div class="box">
+        <div class="tools" role="group" aria-label="Werkzeug">
+          <button class="tool" id="toolPaint" aria-pressed="true">✏️ Malen</button>
+          <button class="tool" id="toolFill" aria-pressed="false">🪣 Füllen</button>
+          <button class="tool" id="toolErase" aria-pressed="false">🧽 Radieren</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="undoBtn" disabled>↶ Rückgängig</button>
+          <label class="check"><input type="checkbox" id="iconToggle" checked> Symbole zeigen</label>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="zinfo" id="zoneInfo"></div>
+      </div>
+
+      <div class="box">
+        <h2>Flächen</h2>
+        <div class="stats">
+          <div class="stackbar" id="stackbar" aria-hidden="true"></div>
+          <div class="statlist" id="statlist"></div>
+          <p class="note">4 Felder = 1 ganze Legoplatte (32 × 32 Noppen).</p>
+        </div>
+      </div>
+
+      <details class="box" id="checkBox">
+        <summary>Planungs-Check</summary>
+        <ul class="hints" id="hints"></ul>
+      </details>
+
+      <div class="box">
+        <h2>Speichern</h2>
+        <p class="note">Der Plan wird automatisch in diesem Browser gespeichert. Für andere Geräte: Datei speichern und dort öffnen.</p>
+        <div class="row">
+          <button class="btn primary" id="pngBtn">Als Bild speichern</button>
+          <button class="btn" id="saveBtn">Datei speichern</button>
+          <button class="btn" id="openBtn">Datei öffnen</button>
+          <input type="file" id="fileInput" accept=".json,application/json" hidden>
+        </div>
+        <p class="toast" id="toast" role="status"></p>
+      </div>
+
+      <details class="box teacher">
+        <summary>Für Lehrpersonen</summary>
+        <p>Das Strassennetz wurde vom Foto abgezeichnet. Stimmt etwas nicht, kannst du es hier anpassen.</p>
+        <label class="check"><input type="checkbox" id="editToggle"> Strassennetz bearbeiten</label>
+        <ul>
+          <li>Mitte einer Platte anklicken: keine Platte → graue Platte → grüne Platte → Fluss</li>
+          <li>Plattenrand anklicken: Strasse zu dieser Seite an/aus</li>
+          <li>Zwei Strassen über Eck ergeben eine Kurve. Das äussere Viertel der Kurve bleibt Bauland.</li>
+        </ul>
+        <div class="row">
+          <button class="btn" id="resetRoadsBtn">Strassen wie auf dem Foto</button>
+          <button class="btn danger" id="clearZonesBtn">Alle Zonen löschen</button>
+        </div>
+      </details>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const COLS = 16, ROWS = 18, PCOLS = COLS / 2, PROWS = ROWS / 2;
+  const STORE_KEY = "bauzonen-legocity-v1";
+  const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  const ZONES = [
+    { id: "wohn", name: "Wohnzone", color: "#f2c230", icon: "🏠",
+      text: "Hier wohnen die Menschen. Es soll ruhig und sicher sein, mit Platz für Gärten.",
+      ex: "Einfamilienhäuser, Wohnblöcke, Reihenhäuser, Gärten" },
+    { id: "zentrum", name: "Zentrumszone", color: "#c4553b", icon: "🛍️",
+      text: "Das Herz der Stadt. Unten sind Läden und Restaurants, oben wohnen Leute. Hier ist viel los.",
+      ex: "Läden, Bäckerei, Café, Bank, Post, Wohnungen über den Läden" },
+    { id: "industrie", name: "Industriezone", color: "#7a5ca6", icon: "🏭",
+      text: "Hier wird gearbeitet und produziert. Es darf laut sein, Lastwagen fahren ein und aus.",
+      ex: "Fabrik, Werkstatt, Lagerhalle, Recyclinghof, Tankstelle" },
+    { id: "oeffentlich", name: "Zone für öffentliche Bauten", color: "#3a7bc4", icon: "🏫",
+      text: "Gebäude, die allen in der Stadt dienen. Sie gehören meist der Gemeinde.",
+      ex: "Schule, Spital, Feuerwehr, Polizei, Gemeindehaus, Bibliothek, Hallenbad" },
+    { id: "gruen", name: "Grünzone / Freizeitzone", color: "#97d36b", icon: "⚽",
+      text: "Hier erholen sich die Menschen und spielen. Grosse Gebäude sind nicht erlaubt.",
+      ex: "Park, Spielplatz, Sportplatz, Familiengärten, Picknickplatz" },
+    { id: "natur", name: "Naturschutzzone", color: "#2d7a3a", icon: "🦋",
+      text: "Hier hat die Natur Vorrang. Tiere und Pflanzen werden geschützt. Bauen ist verboten.",
+      ex: "Wald, Weiher, Flussufer, Ried, Hecken" },
+    { id: "landwirtschaft", name: "Landwirtschaftszone", color: "#d6b47c", icon: "🐄",
+      text: "Hier wächst unser Essen. Gebaut werden dürfen nur Bauernhöfe und Ställe.",
+      ex: "Felder, Wiesen, Obstbäume, Bauernhof, Stall" }
+  ];
+  const ZMAP = Object.fromEntries(ZONES.map(z => [z.id, z]));
+
+  // Strassennetz vom Foto: [Plattenspalte, Plattenzeile, Platte, Anschlüsse]
+  const PHOTO_PLATES = [
+    [2,0,"water",""], [4,0,"green","ES"], [5,0,"gray","EW"], [6,0,"gray","EW"], [7,0,"gray","WS"],
+    [2,1,"green","ES"], [3,1,"green","EW"], [4,1,"green","NSW"], [7,1,"gray","NS"],
+    [1,2,"gray","ES"], [2,2,"green","NW"], [4,2,"green","NS"], [7,2,"gray","NS"],
+    [0,3,"gray","ES"], [1,3,"gray","NW"], [4,3,"gray","NS"], [7,3,"gray","NS"],
+    [0,4,"gray","NS"], [4,4,"gray","NSE"], [5,4,"gray","EW"], [6,4,"gray","EW"], [7,4,"gray","NSW"],
+    [0,5,"gray","NE"], [1,5,"gray","WS"], [4,5,"gray","NS"], [6,5,"gray","SE"], [7,5,"gray","NSW"],
+    [1,6,"gray","NE"], [2,6,"gray","EW"], [3,6,"gray","EWS"], [4,6,"gray","EWN"], [5,6,"gray","EW"], [6,6,"gray","WNS"], [7,6,"gray","NS"],
+    [3,7,"gray","NS"], [6,7,"gray","NSE"], [7,7,"gray","NW"],
+    [3,8,"gray","NE"], [4,8,"gray","EW"], [5,8,"gray","EW"], [6,8,"gray","WN"]
+  ];
+
+  function photoPlates() {
+    const p = Array.from({ length: PROWS }, () => Array(PCOLS).fill(null));
+    for (const [c, r, base, conns] of PHOTO_PLATES) {
+      p[r][c] = { base, n: conns.includes("N"), e: conns.includes("E"), s: conns.includes("S"), w: conns.includes("W") };
+    }
+    return p;
+  }
+  const emptyZones = () => Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+
+  let state = { name: "Legostadt", plates: photoPlates(), zones: emptyZones() };
+  let selZone = "wohn", tool = "paint", editMode = false, showIcons = true;
+  let undoStack = [];
+  let hover = null;
+
+  // ---------- Zellenlogik ----------
+  const connCount = p => (p.n?1:0) + (p.e?1:0) + (p.s?1:0) + (p.w?1:0);
+  const isCurve = p => connCount(p) === 2 && !(p.n && p.s) && !(p.e && p.w);
+
+  function cellKind(c, r) {
+    const p = state.plates[r >> 1][c >> 1];
+    if (!p) return "floor";
+    if (p.base === "water") return "water";
+    const k = connCount(p);
+    if (k === 0) return "plate";
+    if (isCurve(p)) {
+      const fx = p.e ? 0 : 1, fy = p.s ? 0 : 1;
+      if ((c & 1) === fx && (r & 1) === fy) return "plate";
+    }
+    return "road";
+  }
+  const isLand = (c, r) => { const k = cellKind(c, r); return k === "floor" || k === "plate"; };
+  const cellName = (c, r) => LETTERS[c] + (r + 1);
+
+  function cleanZones() {
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (!isLand(c, r)) state.zones[r][c] = null;
+  }
+
+  // ---------- Farben ----------
+  function tokens() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = n => cs.getPropertyValue(n).trim();
+    return { floor: g("--floor"), ink: g("--ink"), muted: g("--muted"), surface: g("--surface") };
+  }
+  const PLATE = {
+    gray:  { base: "#9b9fa2", walk: "#b7babc", road: "#5a5f63", mark: "#f4f4f2", edge: "#f4f4f2" },
+    green: { base: "#3f9a4b", walk: "#f1f3ef", road: "#c5cbc7", mark: "#ffffff", edge: "#2f7a3a" },
+    water: { base: "#3f9a4b" }
+  };
+
+  // ---------- Zeichnen ----------
+  function drawMap(ctx, cs, ox, oy, opts) {
+    const T = tokens();
+    const W = COLS * cs, H = ROWS * cs;
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.fillStyle = T.floor;
+    ctx.fillRect(0, 0, W, H);
+
+    // Zellen
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = c * cs, y = r * cs, kind = cellKind(c, r);
+      const p = state.plates[r >> 1][c >> 1];
+      const z = state.zones[r][c];
+      if (kind === "floor" || kind === "plate") {
+        if (z) { ctx.fillStyle = ZMAP[z].color; ctx.fillRect(x, y, cs, cs); }
+        else if (kind === "plate") { ctx.fillStyle = PLATE[p.base].base; ctx.fillRect(x, y, cs, cs); }
+        if (kind === "plate") drawStuds(ctx, x, y, cs, z ? "rgba(255,255,255,.22)" : "rgba(255,255,255,.18)");
+      } else {
+        ctx.fillStyle = PLATE[p.base].base;
+        ctx.fillRect(x, y, cs, cs);
+        if (kind !== "water") drawStuds(ctx, x, y, cs, "rgba(255,255,255,.15)");
+      }
+    }
+
+    // feines Raster
+    ctx.lineWidth = 1;
+    for (let c = 0; c <= COLS; c++) {
+      ctx.strokeStyle = c % 2 ? "rgba(40,50,56,.10)" : "rgba(40,50,56,.22)";
+      ctx.beginPath(); ctx.moveTo(c * cs + .5, 0); ctx.lineTo(c * cs + .5, H); ctx.stroke();
+    }
+    for (let r = 0; r <= ROWS; r++) {
+      ctx.strokeStyle = r % 2 ? "rgba(40,50,56,.10)" : "rgba(40,50,56,.22)";
+      ctx.beginPath(); ctx.moveTo(0, r * cs + .5); ctx.lineTo(W, r * cs + .5); ctx.stroke();
+    }
+
+    // Zonengrenzen
+    ctx.strokeStyle = "rgba(20,28,32,.85)";
+    ctx.lineWidth = Math.max(1.5, cs * 0.06);
+    ctx.lineCap = "square";
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (!isLand(c, r)) continue;
+      const z = state.zones[r][c];
+      if (c + 1 < COLS && isLand(c + 1, r) && state.zones[r][c + 1] !== z) {
+        ctx.beginPath(); ctx.moveTo((c + 1) * cs, r * cs); ctx.lineTo((c + 1) * cs, (r + 1) * cs); ctx.stroke();
+      }
+      if (r + 1 < ROWS && isLand(c, r + 1) && state.zones[r + 1][c] !== z) {
+        ctx.beginPath(); ctx.moveTo(c * cs, (r + 1) * cs); ctx.lineTo((c + 1) * cs, (r + 1) * cs); ctx.stroke();
+      }
+    }
+
+    // Strassen und Fluss
+    for (let pr = 0; pr < PROWS; pr++) for (let pc = 0; pc < PCOLS; pc++) {
+      const p = state.plates[pr][pc];
+      if (!p) continue;
+      const x0 = pc * 2 * cs, y0 = pr * 2 * cs, S = 2 * cs;
+      if (p.base === "water") drawRiver(ctx, x0, y0, S);
+      else if (connCount(p)) drawRoad(ctx, x0, y0, S, p);
+    }
+
+    // Symbole pro zusammenhängender Fläche
+    if (opts.icons) {
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `${Math.round(cs * 0.62)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+      for (const comp of components()) {
+        const cell = comp.center;
+        ctx.fillStyle = "rgba(255,255,255,.75)";
+        ctx.beginPath(); ctx.arc(cell[0] * cs + cs / 2, cell[1] * cs + cs / 2, cs * 0.42, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#000";
+        ctx.fillText(ZMAP[comp.zone].icon, cell[0] * cs + cs / 2, cell[1] * cs + cs / 2 + cs * 0.03);
+      }
+    }
+
+    // Plattengitter im Bearbeitungsmodus
+    if (opts.edit) {
+      ctx.strokeStyle = "rgba(29,92,136,.9)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      for (let pc = 0; pc <= PCOLS; pc++) { ctx.beginPath(); ctx.moveTo(pc * 2 * cs, 0); ctx.lineTo(pc * 2 * cs, H); ctx.stroke(); }
+      for (let pr = 0; pr <= PROWS; pr++) { ctx.beginPath(); ctx.moveTo(0, pr * 2 * cs); ctx.lineTo(W, pr * 2 * cs); ctx.stroke(); }
+      ctx.setLineDash([]);
+    }
+
+    // Hover
+    if (opts.hover) {
+      const [c, r] = opts.hover;
+      ctx.lineWidth = 3;
+      if (opts.edit) {
+        const pc = c >> 1, pr = r >> 1;
+        ctx.strokeStyle = "#1d5c88";
+        ctx.strokeRect(pc * 2 * cs + 1.5, pr * 2 * cs + 1.5, 2 * cs - 3, 2 * cs - 3);
+      } else if (isLand(c, r)) {
+        ctx.strokeStyle = tool === "erase" ? "#ffffff" : "#111111";
+        ctx.strokeRect(c * cs + 1.5, r * cs + 1.5, cs - 3, cs - 3);
+      }
+    }
+    ctx.restore();
+
+    // Koordinaten
+    if (opts.labels) {
+      ctx.save();
+      ctx.fillStyle = T.muted;
+      ctx.font = `500 ${Math.max(10, Math.round(cs * 0.36))}px "IBM Plex Mono", ui-monospace, monospace`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (let c = 0; c < COLS; c++) ctx.fillText(LETTERS[c], ox + c * cs + cs / 2, oy - cs * 0.45);
+      ctx.textAlign = "right";
+      for (let r = 0; r < ROWS; r++) ctx.fillText(String(r + 1), ox - cs * 0.18, oy + r * cs + cs / 2);
+      ctx.restore();
+    }
+  }
+
+  function drawStuds(ctx, x, y, cs, color) {
+    if (cs < 18) return;
+    ctx.fillStyle = color;
+    const n = 4, step = cs / n, rad = step * 0.26;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      ctx.beginPath(); ctx.arc(x + step * (i + .5), y + step * (j + .5), rad, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawRiver(ctx, x0, y0, S) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0, y0, S, S); ctx.clip();
+    ctx.fillStyle = "#2f7fc0";
+    ctx.beginPath();
+    ctx.moveTo(x0 + S * 0.18, y0);
+    ctx.bezierCurveTo(x0 + S * 0.10, y0 + S * 0.35, x0 + S * 0.26, y0 + S * 0.65, x0 + S * 0.16, y0 + S);
+    ctx.lineTo(x0 + S * 0.92, y0 + S);
+    ctx.bezierCurveTo(x0 + S * 0.98, y0 + S * 0.62, x0 + S * 0.84, y0 + S * 0.35, x0 + S * 0.94, y0);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.7)";
+    ctx.lineWidth = Math.max(1, S * 0.018);
+    ctx.lineCap = "round";
+    for (const [fx, fy] of [[0.35, 0.15], [0.62, 0.32], [0.4, 0.55], [0.68, 0.75], [0.36, 0.86]]) {
+      const x = x0 + S * fx, y = y0 + S * fy;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + S * 0.04, y - S * 0.04, x + S * 0.08, y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawRoad(ctx, x0, y0, S, p) {
+    const col = PLATE[p.base];
+    const mx = x0 + S / 2, my = y0 + S / 2;
+    const ws = S * 0.86, wa = S * 0.62;
+    const ends = { n: [mx, y0], s: [mx, y0 + S], e: [x0 + S, my], w: [x0, my] };
+    const dirs = ["n", "e", "s", "w"].filter(d => p[d]);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0, y0, S, S); ctx.clip();
+    ctx.lineCap = "butt";
+
+    if (isCurve(p)) {
+      const cx = x0 + (p.e ? S : 0), cy = y0 + (p.s ? S : 0);
+      const a1 = Math.atan2(ends[dirs[0]][1] - cy, ends[dirs[0]][0] - cx);
+      const a2 = Math.atan2(ends[dirs[1]][1] - cy, ends[dirs[1]][0] - cx);
+      let d = a2 - a1; while (d > Math.PI) d -= 2 * Math.PI; while (d <= -Math.PI) d += 2 * Math.PI;
+      const arc = (w, color, dash) => {
+        ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []);
+        ctx.beginPath(); ctx.arc(cx, cy, S / 2, a1, a2, d < 0); ctx.stroke();
+      };
+      arc(ws, col.walk);
+      if (p.base === "green") arc(wa + S * 0.05, col.edge);
+      arc(wa, col.road);
+      arc(S * 0.035, col.mark, [S * 0.09, S * 0.07]);
+    } else {
+      const k = dirs.length;
+      const layer = (w, color) => {
+        ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash([]);
+        for (const d of dirs) { ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ends[d][0], ends[d][1]); ctx.stroke(); }
+        if (k !== 2) { ctx.fillStyle = color; ctx.fillRect(mx - w / 2, my - w / 2, w, w); }
+      };
+      layer(ws, col.walk);
+      if (p.base === "green") layer(wa + S * 0.05, col.edge);
+      layer(wa, col.road);
+      ctx.strokeStyle = col.mark; ctx.lineWidth = S * 0.035; ctx.setLineDash([S * 0.09, S * 0.07]);
+      if (k <= 2) {
+        for (const d of dirs) { ctx.beginPath(); ctx.moveTo(ends[d][0], ends[d][1]); ctx.lineTo(mx, my); ctx.stroke(); }
+      } else {
+        const gap = wa / 2 + S * 0.13;
+        for (const d of dirs) {
+          const [ex, ey] = ends[d], ux = Math.sign(ex - mx), uy = Math.sign(ey - my);
+          ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(mx + ux * gap, my + uy * gap); ctx.stroke();
+          // Fussgängerstreifen
+          ctx.setLineDash([]);
+          ctx.fillStyle = col.mark;
+          const near = wa / 2 + S * 0.02, len = S * 0.08, bw = S * 0.035;
+          for (let t = -wa / 2 + bw; t < wa / 2 - bw / 2; t += bw * 2) {
+            if (ux) ctx.fillRect(mx + ux * near + (ux < 0 ? -len : 0), my + t, len, bw);
+            else ctx.fillRect(mx + t, my + uy * near + (uy < 0 ? -len : 0), bw, len);
+          }
+          ctx.setLineDash([S * 0.09, S * 0.07]);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // ---------- Zusammenhängende Flächen ----------
+  function components() {
+    const seen = emptyZones(), out = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const z = state.zones[r][c];
+      if (!z || seen[r][c]) continue;
+      const cells = [], stack = [[c, r]]; seen[r][c] = true;
+      while (stack.length) {
+        const [x, y] = stack.pop(); cells.push([x, y]);
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || seen[ny][nx] || state.zones[ny][nx] !== z) continue;
+          seen[ny][nx] = true; stack.push([nx, ny]);
+        }
+      }
+      const ax = cells.reduce((s, q) => s + q[0], 0) / cells.length, ay = cells.reduce((s, q) => s + q[1], 0) / cells.length;
+      let best = cells[0], bd = Infinity;
+      for (const q of cells) { const d = (q[0] - ax) ** 2 + (q[1] - ay) ** 2; if (d < bd) { bd = d; best = q; } }
+      out.push({ zone: z, cells, center: best, border: cells.some(q => q[0] === 0 || q[1] === 0 || q[0] === COLS - 1 || q[1] === ROWS - 1) });
+    }
+    return out;
+  }
+
+  // ---------- Canvas & Grösse ----------
+  const canvas = document.getElementById("map"), mapbox = document.getElementById("mapbox");
+  const ctx = canvas.getContext("2d");
+  let CS = 32, MARGIN = 28;
+
+  function resize() {
+    const avail = mapbox.clientWidth;
+    const byW = (avail - 4) / (COLS + 0.9);
+    const byH = (Math.max(window.innerHeight, 560) * 0.86) / (ROWS + 0.9);
+    CS = Math.max(14, Math.floor(Math.min(byW, byH, 54)));
+    MARGIN = Math.round(CS * 0.9);
+    const w = MARGIN + COLS * CS + 2, h = MARGIN + ROWS * CS + 2;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + "px"; canvas.style.height = h + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    render();
+  }
+
+  function render() {
+    const T = tokens();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = T.surface;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawMap(ctx, CS, MARGIN, MARGIN, { labels: true, icons: showIcons, edit: editMode, hover });
+  }
+
+  // ---------- Interaktion ----------
+  function cellAt(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left - MARGIN, y = e.clientY - rect.top - MARGIN;
+    const c = Math.floor(x / CS), r = Math.floor(y / CS);
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
+    return { c, r, fx: x / CS, fy: y / CS };
+  }
+
+  const snapshot = () => JSON.stringify({ plates: state.plates, zones: state.zones });
+  function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift(); }
+  function undo() {
+    const s = undoStack.pop(); if (!s) return;
+    const o = JSON.parse(s); state.plates = o.plates; state.zones = o.zones;
+    changed();
+  }
+
+  function paintCell(c, r) {
+    if (!isLand(c, r)) return false;
+    const v = tool === "erase" ? null : selZone;
+    if (state.zones[r][c] === v) return false;
+    state.zones[r][c] = v; return true;
+  }
+
+  function fillFrom(c, r) {
+    if (!isLand(c, r)) return false;
+    const target = state.zones[r][c], v = tool === "erase" ? null : selZone;
+    if (target === v) return false;
+    const stack = [[c, r]];
+    while (stack.length) {
+      const [x, y] = stack.pop();
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS || !isLand(x, y) || state.zones[y][x] !== target) continue;
+      state.zones[y][x] = v;
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    return true;
+  }
+
+  function lineCells(a, b) {
+    const out = []; let x0 = a[0], y0 = a[1]; const x1 = b[0], y1 = b[1];
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    for (;;) { out.push([x0, y0]); if (x0 === x1 && y0 === y1) break; const e2 = 2 * err; if (e2 >= dy) { err += dy; x0 += sx; } if (e2 <= dx) { err += dx; y0 += sy; } }
+    return out;
+  }
+
+  function editPlate(cell) {
+    const pc = cell.c >> 1, pr = cell.r >> 1;
+    const lx = cell.fx / 2 - pc, ly = cell.fy / 2 - pr;
+    const p = state.plates[pr][pc];
+    const edgeDist = { n: ly, s: 1 - ly, w: lx, e: 1 - lx };
+    const side = Object.entries(edgeDist).sort((a, b) => a[1] - b[1])[0];
+    pushUndo();
+    if (side[1] < 0.22) {
+      const d = side[0];
+      const nb = { n: [0, -1, "s"], s: [0, 1, "n"], e: [1, 0, "w"], w: [-1, 0, "e"] }[d];
+      const cur = state.plates[pr][pc] || (state.plates[pr][pc] = { base: "gray", n: false, e: false, s: false, w: false });
+      if (cur.base === "water") cur.base = "gray";
+      const val = !cur[d]; cur[d] = val;
+      const qx = pc + nb[0], qy = pr + nb[1];
+      if (qx >= 0 && qy >= 0 && qx < PCOLS && qy < PROWS) {
+        let q = state.plates[qy][qx];
+        if (val && !q) q = state.plates[qy][qx] = { base: cur.base, n: false, e: false, s: false, w: false };
+        if (q) { if (q.base === "water" && val) q.base = cur.base; q[nb[2]] = val; }
+      }
+    } else {
+      const order = [null, "gray", "green", "water"];
+      const next = order[(order.indexOf(p ? p.base : null) + 1) % order.length];
+      if (!next) {
+        state.plates[pr][pc] = null;
+        const nbs = [[0, -1, "s"], [0, 1, "n"], [1, 0, "w"], [-1, 0, "e"]];
+        for (const [dx, dy, opp] of nbs) { const q = state.plates[pr + dy] && state.plates[pr + dy][pc + dx]; if (q) q[opp] = false; }
+      } else if (!p) state.plates[pr][pc] = { base: next, n: false, e: false, s: false, w: false };
+      else { p.base = next; if (next === "water") p.n = p.e = p.s = p.w = false; }
+    }
+    cleanZones();
+    changed();
+  }
+
+  let painting = false, last = null, strokeChanged = false;
+  canvas.addEventListener("pointerdown", e => {
+    const cell = cellAt(e); if (!cell) return;
+    e.preventDefault();
+    if (editMode) { editPlate(cell); return; }
+    if (tool === "fill") { pushUndo(); if (fillFrom(cell.c, cell.r)) changed(); else undoStack.pop(); return; }
+    canvas.setPointerCapture(e.pointerId);
+    painting = true; strokeChanged = false; pushUndo();
+    last = [cell.c, cell.r];
+    if (paintCell(cell.c, cell.r)) { strokeChanged = true; render(); }
+  });
+  canvas.addEventListener("pointermove", e => {
+    const cell = cellAt(e);
+    hover = cell ? [cell.c, cell.r] : null;
+    updateHoverInfo();
+    if (painting && cell) {
+      for (const [c, r] of lineCells(last, [cell.c, cell.r])) if (paintCell(c, r)) strokeChanged = true;
+      last = [cell.c, cell.r];
+    }
+    render();
+  });
+  const endStroke = () => {
+    if (!painting) return;
+    painting = false;
+    if (strokeChanged) changed(); else undoStack.pop();
+  };
+  canvas.addEventListener("pointerup", endStroke);
+  canvas.addEventListener("pointercancel", endStroke);
+  canvas.addEventListener("pointerleave", () => { if (!painting) { hover = null; updateHoverInfo(); render(); } });
+
+  function updateHoverInfo() {
+    const el = document.getElementById("hoverInfo");
+    if (!hover) { el.textContent = "Fahre mit der Maus über die Karte."; return; }
+    const [c, r] = hover, kind = cellKind(c, r), z = state.zones[r][c];
+    let what;
+    if (kind === "road") what = "Strasse";
+    else if (kind === "water") what = "Fluss";
+    else what = z ? ZMAP[z].name : (kind === "plate" ? "Bauland auf Platte, noch ohne Zone" : "Bauland, noch ohne Zone");
+    el.innerHTML = "";
+    const b = document.createElement("strong"); b.textContent = "Feld " + cellName(c, r);
+    el.append(b, document.createTextNode(" · " + what));
+  }
+
+  // ---------- Seitenleiste ----------
+  const zoneList = document.getElementById("zoneList");
+  for (const z of ZONES) {
+    const b = document.createElement("button");
+    b.className = "zbtn"; b.type = "button"; b.dataset.zone = z.id; b.id = "zone-" + z.id;
+    b.innerHTML = `<span class="chip" style="background:${z.color}">${z.icon}</span><span class="zname"></span><span class="zcount mono"></span>`;
+    b.querySelector(".zname").textContent = z.name;
+    b.addEventListener("click", () => { selZone = z.id; if (tool === "erase") setTool("paint"); updatePanel(); });
+    zoneList.append(b);
+  }
+
+  function setTool(t) {
+    tool = t;
+    for (const [id, v] of [["toolPaint", "paint"], ["toolFill", "fill"], ["toolErase", "erase"]]) document.getElementById(id).setAttribute("aria-pressed", String(tool === v));
+    document.getElementById("toolHint").textContent = {
+      paint: "Malen: Klicken und ziehen",
+      fill: "Füllen: Klicke in eine Fläche, sie wird ganz eingefärbt",
+      erase: "Radieren: Klicken und ziehen"
+    }[t];
+    updatePanel();
+  }
+  document.getElementById("toolPaint").onclick = () => setTool("paint");
+  document.getElementById("toolFill").onclick = () => setTool("fill");
+  document.getElementById("toolErase").onclick = () => setTool("erase");
+  document.getElementById("undoBtn").onclick = undo;
+  document.getElementById("iconToggle").onchange = e => { showIcons = e.target.checked; render(); };
+
+  function counts() {
+    const n = Object.fromEntries(ZONES.map(z => [z.id, 0])); let land = 0;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (isLand(c, r)) { land++; const z = state.zones[r][c]; if (z) n[z]++; }
+    return { n, land };
+  }
+  const plates = n => {
+    const whole = Math.floor(n / 4), rest = n % 4;
+    const frac = ["", "¼", "½", "¾"][rest];
+    if (!whole && !rest) return "0";
+    return (whole ? String(whole) : "") + (whole && rest ? " " : "") + frac;
+  };
+
+  function updatePanel() {
+    const { n, land } = counts();
+    let zoned = 0;
+    for (const z of ZONES) {
+      zoned += n[z.id];
+      const b = document.getElementById("zone-" + z.id);
+      b.setAttribute("aria-pressed", String(selZone === z.id && tool !== "erase"));
+      b.querySelector(".zcount").textContent = n[z.id] ? n[z.id] + " F." : "";
+    }
+    document.getElementById("pkFree").textContent = `${zoned} von ${land} Feldern eingeteilt`;
+
+    const zi = document.getElementById("zoneInfo");
+    if (tool === "erase") {
+      zi.style.setProperty("--zc", "var(--line)");
+      zi.innerHTML = "<h3>Radiergummi</h3><p>Entfernt die Zone von einem Feld. Das Feld ist danach wieder Bauland ohne Zone.</p>";
+    } else {
+      const z = ZMAP[selZone];
+      zi.style.setProperty("--zc", z.color);
+      zi.innerHTML = `<span class="eyebrow">Ausgewählt</span><h3></h3><p class="t"></p><p class="ex"></p>`;
+      zi.querySelector("h3").textContent = z.icon + " " + z.name;
+      zi.querySelector(".t").textContent = z.text;
+      zi.querySelector(".ex").textContent = "Zum Beispiel: " + z.ex;
+    }
+
+    const bar = document.getElementById("stackbar"), list = document.getElementById("statlist");
+    bar.innerHTML = ""; list.innerHTML = "";
+    for (const z of ZONES) {
+      if (n[z.id]) { const s = document.createElement("span"); s.style.width = (n[z.id] / land * 100) + "%"; s.style.background = z.color; s.title = z.name; bar.append(s); }
+      const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = z.color;
+      const nm = document.createElement("span"); nm.textContent = z.name;
+      const f = document.createElement("span"); f.className = "num"; f.textContent = `${n[z.id]} F.`;
+      const pct = document.createElement("span"); pct.className = "num"; pct.textContent = land ? Math.round(n[z.id] / land * 100) + " %" : "–";
+      list.append(sw, nm, f, pct);
+    }
+    const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = "var(--floor)";
+    const nm = document.createElement("span"); nm.textContent = "Noch ohne Zone";
+    const f = document.createElement("span"); f.className = "num"; f.textContent = `${land - zoned} F.`;
+    const pct = document.createElement("span"); pct.className = "num"; pct.textContent = land ? Math.round((land - zoned) / land * 100) + " %" : "–";
+    list.append(sw, nm, f, pct);
+    list.title = "F. = Felder. " + ZONES.map(z => `${z.name}: ${plates(n[z.id])} Platten`).join(", ");
+
+    document.getElementById("undoBtn").disabled = undoStack.length === 0;
+    renderHints(n, land, zoned);
+  }
+
+  // ---------- Planungs-Check ----------
+  function renderHints(n, land, zoned) {
+    const hints = [];
+    const pairs = (a, b) => {
+      let k = 0;
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const z = state.zones[r][c]; if (!z) continue;
+        for (const [dx, dy] of [[1, 0], [0, 1]]) {
+          const nx = c + dx, ny = r + dy; if (nx >= COLS || ny >= ROWS) continue;
+          const y = state.zones[ny][nx];
+          if ((z === a && y === b) || (z === b && y === a)) k++;
+        }
+      }
+      return k;
+    };
+    if (zoned === 0) {
+      hints.push(["info", "Noch keine Zonen eingeteilt. Wähle eine Zone und male auf die freien Felder."]);
+    } else {
+      const iw = pairs("industrie", "wohn");
+      if (iw) hints.push(["tipp", `Industrie grenzt an ${iw} ${iw === 1 ? "Stelle" : "Stellen"} direkt an die Wohnzone. Fabriken sind laut. Wäre ein Park oder eine Strasse dazwischen besser?`]);
+      else if (n.industrie && n.wohn) hints.push(["gut", "Wohnen und Industrie sind voneinander getrennt."]);
+      const io = pairs("industrie", "oeffentlich");
+      if (io) hints.push(["tipp", "Öffentliche Bauten liegen direkt neben der Industrie. Möchtest du neben einer Fabrik zur Schule gehen?"]);
+      const in_ = pairs("industrie", "natur");
+      if (in_) hints.push(["tipp", "Die Naturschutzzone grenzt an die Industrie. Lärm und Abgase stören die Tiere."]);
+      if (!n.oeffentlich) hints.push(["tipp", "Es gibt noch keine Zone für öffentliche Bauten. Wo gehen die Kinder zur Schule? Wo steht die Feuerwehr?"]);
+      if (!n.wohn) hints.push(["tipp", "Es gibt noch keine Wohnzone. Wo wohnen die Menschen?"]);
+      if (!n.gruen && !n.natur) hints.push(["tipp", "Die Stadt hat noch keine grünen Flächen. Wo können die Leute spielen und sich erholen?"]);
+
+      // Fluss
+      let byWater = { industrie: 0, schutz: 0 };
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const z = state.zones[r][c]; if (!z) continue;
+        let near = false;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const x = c + dx, y = r + dy;
+          if (x >= 0 && y >= 0 && x < COLS && y < ROWS && cellKind(x, y) === "water") near = true;
+        }
+        if (!near) continue;
+        if (z === "industrie") byWater.industrie++;
+        if (z === "natur" || z === "gruen") byWater.schutz++;
+      }
+      if (byWater.industrie) hints.push(["tipp", "Eine Fabrik steht direkt am Fluss. Was passiert, wenn schmutziges Wasser in den Fluss läuft?"]);
+      else if (byWater.schutz) hints.push(["gut", "Am Fluss gibt es Natur oder einen Park. Gut für Tiere und Menschen."]);
+
+      const comps = components();
+      const agri = comps.filter(cp => cp.zone === "landwirtschaft");
+      if (agri.some(cp => !cp.border)) hints.push(["tipp", "Ein Bauernhof-Feld liegt mitten in der Stadt. Landwirtschaft braucht viel Platz und liegt meist am Stadtrand."]);
+      const centers = comps.filter(cp => cp.zone === "zentrum");
+      if (centers.length >= 3) hints.push(["tipp", `Die Zentrumszone ist in ${centers.length} Teile verstreut. Ein Zentrum liegt meist an einem Ort zusammen, damit man alles zu Fuss erreicht.`]);
+      if (land - zoned > 0) hints.push(["info", `Noch ${land - zoned} Felder ohne Zone.`]);
+      else hints.push(["gut", "Alle Felder sind eingeteilt."]);
+    }
+    const ul = document.getElementById("hints"); ul.innerHTML = "";
+    for (const [kind, text] of hints) {
+      const li = document.createElement("li");
+      const t = document.createElement("span"); t.className = "tag " + kind; t.textContent = { tipp: "Tipp", gut: "Gut", info: "Info" }[kind];
+      const s = document.createElement("span"); s.textContent = text;
+      li.append(t, s); ul.append(li);
+    }
+  }
+
+  // ---------- Speichern ----------
+  function persist() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(exportData())); } catch (_) {}
+  }
+  function exportData() {
+    return { app: "bauzonen-legocity", version: 1, name: state.name, cols: COLS, rows: ROWS, plates: state.plates, zones: state.zones };
+  }
+  function importData(o) {
+    if (!o || o.app !== "bauzonen-legocity" || o.cols !== COLS || o.rows !== ROWS) throw new Error("format");
+    if (!Array.isArray(o.zones) || o.zones.length !== ROWS || !Array.isArray(o.plates) || o.plates.length !== PROWS) throw new Error("format");
+    state.plates = o.plates.map(row => row.map(p => p ? { base: ["gray", "green", "water"].includes(p.base) ? p.base : "gray", n: !!p.n, e: !!p.e, s: !!p.s, w: !!p.w } : null));
+    state.zones = o.zones.map(row => row.map(z => ZMAP[z] ? z : null));
+    state.name = typeof o.name === "string" ? o.name.slice(0, 30) : "Legostadt";
+    document.getElementById("cityName").value = state.name;
+    sizeName();
+    cleanZones();
+  }
+  function changed() { persist(); updatePanel(); render(); }
+
+  function toast(msg) {
+    const t = document.getElementById("toast"); t.textContent = msg;
+    clearTimeout(toast.h); toast.h = setTimeout(() => (t.textContent = ""), 4000);
+  }
+  const fileBase = () => (state.name || "Legostadt").replace(/[^\wäöüÄÖÜ-]+/g, "_");
+  function download(url, name) {
+    const a = document.createElement("a"); a.href = url; a.download = name;
+    document.body.append(a); a.click(); a.remove();
+  }
+
+  document.getElementById("saveBtn").onclick = () => {
+    const blob = new Blob([JSON.stringify(exportData())], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    download(url, `Zonenplan_${fileBase()}.json`);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast("Datei gespeichert.");
+  };
+  const fileInput = document.getElementById("fileInput");
+  document.getElementById("openBtn").onclick = () => fileInput.click();
+  fileInput.onchange = () => {
+    const f = fileInput.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try { pushUndo(); importData(JSON.parse(rd.result)); changed(); toast("Plan geöffnet."); }
+      catch (_) { undoStack.pop(); toast("Diese Datei ist kein Zonenplan aus dieser App."); }
+      fileInput.value = "";
+    };
+    rd.readAsText(f);
+  };
+
+  document.getElementById("pngBtn").onclick = () => {
+    const cs = 40, m = 36, legendW = 330, head = 70;
+    const W = m + COLS * cs + 24 + legendW, H = head + m + ROWS * cs + 24;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const c2 = cv.getContext("2d");
+    c2.fillStyle = "#ffffff"; c2.fillRect(0, 0, W, H);
+    const root = document.documentElement, prev = root.getAttribute("data-theme");
+    root.setAttribute("data-theme", "light");
+    drawMap(c2, cs, m, head + m, { labels: true, icons: showIcons, edit: false, hover: null });
+    if (prev === null) root.removeAttribute("data-theme"); else root.setAttribute("data-theme", prev);
+    c2.fillStyle = "#1b2830";
+    c2.font = '800 28px "Bricolage Grotesque", sans-serif';
+    c2.textBaseline = "alphabetic"; c2.textAlign = "left";
+    c2.fillText("Zonenplan " + (state.name || "Legostadt"), 20, 44);
+    c2.font = '500 13px "IBM Plex Mono", monospace'; c2.fillStyle = "#56646c";
+    c2.fillText("1 Feld = ¼ Strassenplatte = 16 × 16 Noppen", 20, 64);
+    const { n, land } = counts();
+    let y = head + m + 10; const lx = m + COLS * cs + 24;
+    c2.font = '700 16px "Atkinson Hyperlegible", sans-serif'; c2.fillStyle = "#1b2830";
+    c2.fillText("Legende", lx, y); y += 18;
+    for (const z of ZONES) {
+      c2.fillStyle = z.color; c2.fillRect(lx, y, 26, 26);
+      c2.strokeStyle = "rgba(0,0,0,.35)"; c2.strokeRect(lx + .5, y + .5, 25, 25);
+      c2.fillStyle = "#1b2830"; c2.font = '700 14px "Atkinson Hyperlegible", sans-serif';
+      c2.fillText(z.name, lx + 36, y + 13);
+      c2.fillStyle = "#56646c"; c2.font = '500 12px "IBM Plex Mono", monospace';
+      c2.fillText(`${n[z.id]} Felder · ${land ? Math.round(n[z.id] / land * 100) : 0} %`, lx + 36, y + 28);
+      y += 42;
+    }
+    download(cv.toDataURL("image/png"), `Zonenplan_${fileBase()}.png`);
+    toast("Bild gespeichert.");
+  };
+
+  // ---------- Lehrpersonen ----------
+  document.getElementById("editToggle").onchange = e => {
+    editMode = e.target.checked;
+    canvas.classList.toggle("editing", editMode);
+    document.getElementById("editBanner").hidden = !editMode;
+    render();
+  };
+  document.getElementById("resetRoadsBtn").onclick = () => { pushUndo(); state.plates = photoPlates(); cleanZones(); changed(); toast("Strassennetz wie auf dem Foto."); };
+  const clearBtn = document.getElementById("clearZonesBtn");
+  clearBtn.onclick = () => {
+    if (clearBtn.dataset.armed !== "1") {
+      clearBtn.dataset.armed = "1"; clearBtn.textContent = "Wirklich alle löschen?";
+      clearTimeout(clearBtn.h); clearBtn.h = setTimeout(() => { clearBtn.dataset.armed = ""; clearBtn.textContent = "Alle Zonen löschen"; }, 3500);
+      return;
+    }
+    clearBtn.dataset.armed = ""; clearBtn.textContent = "Alle Zonen löschen";
+    pushUndo(); state.zones = emptyZones(); changed(); toast("Alle Zonen gelöscht. Rückgängig ist möglich.");
+  };
+
+  // ---------- Name ----------
+  const nameInput = document.getElementById("cityName");
+  function sizeName() { nameInput.style.width = Math.max(4, nameInput.value.length + 1) + "ch"; }
+  nameInput.addEventListener("input", () => { state.name = nameInput.value; sizeName(); persist(); });
+
+  window.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && document.activeElement !== nameInput) { e.preventDefault(); undo(); }
+  });
+
+  // ---------- Start ----------
+  try { const s = localStorage.getItem(STORE_KEY); if (s) importData(JSON.parse(s)); } catch (_) { state = { name: "Legostadt", plates: photoPlates(), zones: emptyZones() }; }
+  sizeName();
+  new ResizeObserver(resize).observe(mapbox);
+  window.addEventListener("resize", resize);
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  mq.addEventListener && mq.addEventListener("change", render);
+  new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+  updatePanel();
+  resize();
+})();
+</script>
+</body>
+</html>
