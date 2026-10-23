@@ -287,8 +287,8 @@ details.box > summary { cursor: pointer; font-family: var(--font-display); font-
     [0,4,"gray","NS"], [4,4,"gray","NSE"], [5,4,"gray","EW"], [6,4,"gray","EW"], [7,4,"gray","NSW"],
     [0,5,"gray","NE"], [1,5,"gray","WS"], [4,5,"gray","NS"], [6,5,"gray","SE"], [7,5,"gray","NSW"],
     [1,6,"gray","NE"], [2,6,"gray","EW"], [3,6,"gray","EWS"], [4,6,"gray","EWN"], [5,6,"gray","EW"], [6,6,"gray","WNS"], [7,6,"gray","NS"],
-    [3,7,"gray","NS"], [6,7,"gray","NSE"], [7,7,"gray","NW"],
-    [3,8,"gray","NE"], [4,8,"gray","EW"], [5,8,"gray","EW"], [6,8,"gray","WN"]
+    [3,7,"gray","NSE"], [6,7,"gray","NSEW"], [7,7,"gray","NW"],
+    [3,8,"gray","NE"], [4,8,"gray","EWN"], [5,8,"gray","EWN"], [6,8,"gray","WN"]
   ];
 
   function photoPlates() {
@@ -518,13 +518,18 @@ details.box > summary { cursor: pointer; font-family: var(--font-display); font-
         for (const d of dirs) { ctx.beginPath(); ctx.moveTo(ends[d][0], ends[d][1]); ctx.lineTo(mx, my); ctx.stroke(); }
       } else {
         const gap = wa / 2 + S * 0.13;
-        // Beim T-Stück gibt es nur auf der abzweigenden Strasse einen Fussgängerstreifen
+        // Beim T-Stück läuft die Mittellinie im Querbalken durch, und nur die abzweigende Strasse hat einen Fussgängerstreifen
         const opposite = { n: "s", s: "n", e: "w", w: "e" };
         const stem = k === 3 ? dirs.find(d => !p[opposite[d]]) : null;
+        if (stem) {
+          const a = dirs.find(d => d !== stem);
+          const [x1, y1] = ends[a], [x2, y2] = ends[opposite[a]];
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        }
         for (const d of dirs) {
           const [ex, ey] = ends[d], ux = Math.sign(ex - mx), uy = Math.sign(ey - my);
-          ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(mx + ux * gap, my + uy * gap); ctx.stroke();
           if (stem && d !== stem) continue;
+          if (!stem) { ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(mx + ux * gap, my + uy * gap); ctx.stroke(); }
           // Fussgängerstreifen
           ctx.setLineDash([]);
           ctx.fillStyle = col.mark;
