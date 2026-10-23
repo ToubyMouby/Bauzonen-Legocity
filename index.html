@@ -73,7 +73,7 @@ h1 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: c
 }
 #cityName:focus { outline: none; border-bottom-color: var(--accent); }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.pk-meta .mono { font-size: 14px; }
+.pk-meta .mono { font-size: 16px; }
 
 /* Hauptbereich */
 .main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
@@ -159,14 +159,7 @@ details.box > summary { cursor: pointer; font-family: var(--font-display); font-
       <h1><span>Bauzonen</span> <input id="cityName" type="text" value="Legostadt" aria-label="Name der Stadt" maxlength="30" spellcheck="false"></h1>
     </div>
     <div class="pk-meta">
-      <span class="eyebrow">Raster</span>
-      <span class="mono">1 Feld = ¼ Strassenplatte</span>
-      <span class="mono">= 16 × 16 Noppen</span>
-    </div>
-    <div class="pk-meta">
-      <span class="eyebrow">Plan</span>
-      <span class="mono" id="pkSize">16 × 18 Felder</span>
-      <span class="mono" id="pkFree">0 von 0 eingeteilt</span>
+      <span class="mono" id="pkFree">0 von 0 Feldern eingeteilt</span>
     </div>
   </header>
 
@@ -249,7 +242,8 @@ details.box > summary { cursor: pointer; font-family: var(--font-display); font-
 <script>
 (() => {
   "use strict";
-  const COLS = 16, ROWS = 18, PCOLS = COLS / 2, PROWS = ROWS / 2;
+  // Strassennetz 16 × 18 Felder plus ringsum ein Rand von 2 Feldern (1 Platte)
+  const COLS = 20, ROWS = 22, PCOLS = COLS / 2, PROWS = ROWS / 2, BORDER = 1;
   const STORE_KEY = "bauzonen-legocity-v1";
   const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -294,7 +288,7 @@ details.box > summary { cursor: pointer; font-family: var(--font-display); font-
   function photoPlates() {
     const p = Array.from({ length: PROWS }, () => Array(PCOLS).fill(null));
     for (const [c, r, base, conns] of PHOTO_PLATES) {
-      p[r][c] = { base, n: conns.includes("N"), e: conns.includes("E"), s: conns.includes("S"), w: conns.includes("W") };
+      p[r + BORDER][c + BORDER] = { base, n: conns.includes("N"), e: conns.includes("E"), s: conns.includes("S"), w: conns.includes("W") };
     }
     return p;
   }
@@ -871,6 +865,13 @@ details.box > summary { cursor: pointer; font-family: var(--font-display); font-
     return { app: "bauzonen-legocity", version: 1, name: state.name, cols: COLS, rows: ROWS, plates: state.plates, zones: state.zones };
   }
   function importData(o) {
+    // Pläne aus der ersten Version (16 × 18 Felder, ohne Rand) bekommen den Rand dazu
+    if (o && o.app === "bauzonen-legocity" && o.cols === COLS - 4 && o.rows === ROWS - 4 && Array.isArray(o.zones) && Array.isArray(o.plates)) {
+      const pad = (rows, n, w) => [...Array(n).fill(null).map(() => Array(w).fill(null)),
+        ...rows.map(row => [...Array(n).fill(null), ...row, ...Array(n).fill(null)]),
+        ...Array(n).fill(null).map(() => Array(w).fill(null))];
+      o = { ...o, cols: COLS, rows: ROWS, zones: pad(o.zones, 2, COLS), plates: pad(o.plates, BORDER, PCOLS) };
+    }
     if (!o || o.app !== "bauzonen-legocity" || o.cols !== COLS || o.rows !== ROWS) throw new Error("format");
     if (!Array.isArray(o.zones) || o.zones.length !== ROWS || !Array.isArray(o.plates) || o.plates.length !== PROWS) throw new Error("format");
     state.plates = o.plates.map(row => row.map(p => p ? { base: ["gray", "green", "water"].includes(p.base) ? p.base : "gray", n: !!p.n, e: !!p.e, s: !!p.s, w: !!p.w } : null));

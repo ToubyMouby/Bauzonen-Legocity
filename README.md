@@ -2,7 +2,7 @@
 
 Eine einfache Web-App für den Unterricht (5. Klasse, Thema Stadtentwicklung). Die Kinder teilen das Strassennetz der Lego-Stadt in Bauzonen ein.
 
-- **Raster:** 1 Feld = ¼ Lego-Strassenplatte (16 × 16 Noppen). Die Karte hat 16 × 18 Felder (8 × 9 Platten).
+- **Raster:** 1 Feld = ¼ Lego-Strassenplatte (16 × 16 Noppen). Die Karte hat 20 × 22 Felder: das Strassennetz (8 × 9 Platten) plus ringsum ein Rand von 2 Feldern.
 - **Zonen:** Wohnzone, Zentrumszone, Industriezone, Zone für öffentliche Bauten, Grünzone/Freizeitzone, Naturschutzzone, Landwirtschaftszone.
 - **Werkzeuge:** Malen, Füllen (ganze Fläche), Radieren, Rückgängig.
 - **Flächen:** Anzahl Felder und Prozent pro Zone.
