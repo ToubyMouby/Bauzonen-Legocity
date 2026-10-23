@@ -518,9 +518,13 @@ details.box > summary { cursor: pointer; font-family: var(--font-display); font-
         for (const d of dirs) { ctx.beginPath(); ctx.moveTo(ends[d][0], ends[d][1]); ctx.lineTo(mx, my); ctx.stroke(); }
       } else {
         const gap = wa / 2 + S * 0.13;
+        // Beim T-Stück gibt es nur auf der abzweigenden Strasse einen Fussgängerstreifen
+        const opposite = { n: "s", s: "n", e: "w", w: "e" };
+        const stem = k === 3 ? dirs.find(d => !p[opposite[d]]) : null;
         for (const d of dirs) {
           const [ex, ey] = ends[d], ux = Math.sign(ex - mx), uy = Math.sign(ey - my);
           ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(mx + ux * gap, my + uy * gap); ctx.stroke();
+          if (stem && d !== stem) continue;
           // Fussgängerstreifen
           ctx.setLineDash([]);
           ctx.fillStyle = col.mark;
